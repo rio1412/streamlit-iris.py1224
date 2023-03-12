@@ -1,57 +1,64 @@
-# 基本ライブラリ
 import streamlit as st
+from pydub import AudioSegment
+from scipy import fftpack
 import numpy as np
-import pandas as pd
-from sklearn.linear_model import LogisticRegression
-from sklearn.datasets import load_iris
+import cv2
+from IPython.display import display, HTML
+import time
 
-# データセット読み込み
-iris = load_iris()
-df = pd.DataFrame(iris.data, columns=iris.feature_names)
+st.title("音楽に合わせて明滅するアプリ")
 
-# 目標値
-df['target'] = iris.target
+uploaded_file = st.file_uploader("音楽ファイルをアップロードしてください", type=['mp3'])
 
-# 目標値を数字から花の名前に変更
-df.loc[df['target'] == 0, 'target'] = 'setosa'
-df.loc[df['target'] == 1, 'target'] = 'versicolor'
-df.loc[df['target'] == 2, 'target'] = 'virginica'
+if uploaded_file is not None:
+    # 音楽ファイルを読み込む
+    song = AudioSegment.from_file(uploaded_file)
 
-# 予測モデル構築
-x = iris.data[:, [0, 2]] 
-y = iris.target
+    # プログレスバーを表示する
+    progress_bar = st.progress(0)
 
-# ロジスティック回帰
-clf = LogisticRegression()
-clf.fit(x, y)
+    # 明滅のパターンを定義する
+    pattern = [np.sin(np.linspace(0, 2*np.pi, 100)) * 127 + 128,
+               np.sin(np.linspace(0, 2*np.pi, 100)) * -127 + 128,
+               np.zeros(100)]
 
-# サイドバー（入力画面）
-st.sidebar.header('Input Features')
+    # 明滅のインデックスを初期化する
+    pattern_index = 0
 
-sepalValue = st.sidebar.slider('sepal length (cm)', min_value=0.0, max_value=10.0, step=0.1)
-petalValue = st.sidebar.slider('petal length (cm)', min_value=0.0, max_value=10.0, step=0.1)
+    # 音楽を再生する
+    song.export("tmp.wav", format="wav")
+    display(HTML("""
+        <audio controls>
+          <source src="tmp.wav" type="audio/wav">
+        </audio>
+    """))
+    time.sleep(1)  # 音楽ファイルが読み込まれるまで待機する
 
-# メインパネル
-st.title('Iris Classifier')
-st.write('## Input Value')
+    # 明滅を表示するウィンドウを作成する
+    cv2.namedWindow('Color', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Color', 400, 400)
 
-# インプットデータ（1行のデータフレーム）
-value_df = pd.DataFrame([],columns=['data','sepal length (cm)','petal length (cm)'])
-record = pd.Series(['data',sepalValue, petalValue], index=value_df.columns)
-value_df = value_df.append(record, ignore_index=True)
-value_df.set_index('data',inplace=True)
+    # フレームをループする
+    samples = np.array(song.get_array_of_samples())
+    for i in range(len(samples)):
+        # 周波数成分の強度から色を決定する
+        color = np.array([np.clip(spectrum[i], 0, 255), 255-np.clip(spectrum[i], 0, 255), 0])
 
-# 入力値の値
-st.write(value_df)
+        # 明滅のパターンに従って色を変更する
+        color = np.array([color[j] + pattern[pattern_index][j] for j in range(3)])
+        color = np.clip(color, 0, 255).astype(np.uint8)
 
-# 予測値のデータフレーム
-pred_probs = clf.predict_proba(value_df)
-pred_df = pd.DataFrame(pred_probs,columns=['setosa','versicolor','virginica'],index=['probability'])
+        # 明滅のインデックスを更新する
+        pattern_index += 1
+        if pattern_index >= len(pattern):
+            pattern_index = 0
 
-st.write('## Prediction')
-st.write(pred_df)
+        # ウィンドウに色を描画する
+        cv2.imshow('Color', np.tile(color, (400, 400, 1)))
+        cv2.waitKey(1)
 
-# 予測結果の出力
-name = pred_df.idxmax(axis=1).tolist()
-st.write('## Result')
-st.write('このアイリスはきっと',str(name[0]),'です!')
+        # プログレスバーを更新する
+        progress_bar.progress(i / len(samples))
+
+    # ウィンドウを閉じる
+    cv2.destroyAllWindows()
