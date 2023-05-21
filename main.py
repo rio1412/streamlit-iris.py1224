@@ -1,98 +1,65 @@
-# 必要なライブラリをインポート
+#以下全コード(変更案2バージョン)
 import streamlit as st
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.datasets import load_iris
 
-# タイトルとテキストを記入
-st.title('Streamlit 基礎')
-st.write('Hello World!')
 
-# データフレームの準備
-df = pd.DataFrame({
-    '1列目' : [1, 2, 3, 4],
-    '2列目' : [10, 20, 30, 40]
-})
+# データセット読みこみ
+iris = load_iris()
+df = pd.DataFrame(iris.data, columns=iris.feature_names)
 
-# 動的なテーブル
-st.dataframe(df)
+# 目標値
+df["target"] = iris.target
 
-# 引数を使用した動的テーブル
-st.dataframe(df.style.highlight_max(axis = 0) , width = 100 , height = 150)
+# 目標値を数字から花の名前に変更
+df.loc[df["target"] == 0, "target"] = "setsa"
+df.loc[df["target"] == 1, "target"] = "versicolor"
+df.loc[df["target"] == 2, "target"] = "virginica"
 
-# 静的なテーブル
-st.table(df)
 
-# 10 行 3 列のデータフレームを準備
-df = pd.DataFrame(
-    np.random.rand(10,3),
-    columns = ['a', 'b', 'c']
+# 予測モデル構築
+x = iris.data[:, [0, 2]]
+y = iris.target
+
+# ロジスティック回帰
+clf = LogisticRegression()
+clf.fit(x, y)
+
+# サイドバー(入力画面)
+st.sidebar.header("Input Features")
+
+sepalValue = st.sidebar.slider(
+    "sepal length (cm)", min_value=0.0, max_value=10.0, step=0.1
+)
+petalValue = st.sidebar.slider(
+    "petal length (cm)", min_value=0.0, max_value=10.0, step=0.1
 )
 
-# 折れ線グラフ
-st.line_chart(df)
 
-# 面グラフ
-st.area_chart(df)
+# メインパネル
+st.title("Iris Callasifier")
+st.write("## Input Value")
 
-# 棒グラフ
-st.bar_chart(df)
+# インプットデータ(1行のデータフレーム)
+record = pd.Series(["data", sepalValue, petalValue], index=value_df.columns)
+value_df = pd.concat([value_df, record.to_frame().T], ignore_index=True)
 
-# プロットする乱数をデータフレームで用意
-df = pd.DataFrame(
+# 入力値の値の表示
+st.write(value_df)
 
-    # 乱数 + 新宿の緯度と経度
-    np.random.rand(100,2) / [50, 50] + [35.69, 139.70],
-    columns = ['lat', 'lon']
+
+# 予測値のデータフレーム
+pred_probs = clf.predict_proba(value_df)
+pred_df = pd.DataFrame(
+    pred_probs, columns=["setosa", "versicolor", "virginica"], index=["probability"]
 )
 
-# マップをプロット
-st.map(df)
+st.write("## Prediction")
+st.write(pred_df)
 
-# Pillow
-from PIL import Image
-
-# 画像の読み込み
-img = Image.open('iris.jpg')
-st.image(img,caption = 'Iris' , use_column_width = True)
-
-# チェックボックス
-if st.checkbox('Show Image'):
-    img = Image.open('iris.jpg')
-    st.image(img,caption = 'Iris' , use_column_width = True)
-
-# セレクトボックス
-option = st.selectbox(
-    '好きな数字を入力してください。',
-    list(range(1, 11))
-)
-
-'あなたの好きな数字は' , option , 'です。'
-
-# テキスト入力による値の動的変更
-text = st.sidebar.text_input('あなたの好きなスポーツを教えて下さい。')
-'あなたの好きなスポーツ：' , text
-
-# スライダーによる値の動的変更
-condition = st.sidebar.slider('あなたの今の調子は？', 0, 100, 50)
-'コンディション：' , condition
-
-# expander
-expander1 = st.expander('質問1')
-expander1.write('質問1の回答')
-expander2 = st.expander('質問2')
-expander2.write('質問2の回答')
-expander3 = st.expander('質問3')
-expander3.write('質問3の回答')
-
-import time
-
-latest_iteration = st.empty()
-bar = st.progress(0)
-
-# プログレスバーを0.1秒毎に進める
-for i in range(100):
-    latest_iteration.text(f'Iteration{i + 1}')
-    bar.progress(i + 1)
-    time.sleep(0.1)
-
-'Done'
+# 予測結果の出力
+name = pred_df.idxmax(axis=1).to_list()
+st.write("## Result")
+st.write("このアイリスはきっと", str(name[0]), "です")
